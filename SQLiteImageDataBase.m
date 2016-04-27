@@ -16,7 +16,7 @@ classdef SQLiteImageDataBase < handle
     The database can be queried for metadata parameter ranges and the image
     paths gets returned.
      
-    FOLLOW BELOW AS SETUP
+    FOLLOW BELOW AS SETUP ***********************
     1. download SQLite3 (I used Sqlite 3.11)
     https://www.sqlite.org/download.html
     
@@ -36,18 +36,45 @@ classdef SQLiteImageDataBase < handle
     for more help:
     http://www.mathworks.com/help/database/ug/sqlite-jdbc-windows.html
     
-    EXAMPLE USE:
+
+    EXAMPLE USE: *********************************
     %Initialize Database and Table
     db = SQLiteImageDataBase('koff', 'Experiment_1');
     
-    %Add images and Metadata to Table
+    %Add images and Metadata to Table with a new name 'Bike_blue' and a
+    Subclass of 1 and into the Subset of 2
     db.InsertIntoTable('Bike_blue', 1, 2);
     
     %Query table for parameter ranges
-    db.RetrieveEntriesFromTable('Bike_blue', '0','1', '0.5','0.7' , '0', '2', '0', '-1', '0', '-1','0', 'Hum_C_Score', '50','0'  )
-    
+    %Get all entries of this range sorted by Hum_C_score 
+    query_return = db.RetrieveEntriesFromTable('Bike_blue2', '0','1',...
+    '0.5','0.7' , '0', '2', '0', '-1', '0', '-1','0', 'Hum_C_Score', '50','0')
+
     %expand the cursor to get data into the Matlab workspace as cell matrix
-    the_data = ans.data
+    the_data = ans.query_return
+
+    %Get one image metadata entry by the file name of image
+    current_image_data =
+    db.RetrieveSingleEntryByName('patch_id107_7364456323.png').data
+    
+    %Update Entry by filename (update data 'Times_wrong' to 1002), row 14 is
+    %the image name within the image data (can also use eg 
+    %'patch_id107_7364456323.png' instead of current_image_data(14)
+    db.UpdateEntry(char(current_image_data(14)),'Times_wrong',1002)
+
+    %retrieve the whole image tree the current image belongs to.
+    %The tree is based on what was specified in the initial
+    %image import as being part of the same tree. Specify with second
+    %parameter what you want your tree to be ordered as
+    current_tree = 
+        db.RetrieveWholeTreeByName(char(current_image_data(14)).data,
+        'Hum_C_Score')
+    
+    %Retrieve image one level up in tree, using Hum_C_Score as tree order
+    db.GetImageOneUpInTree(char(current_image_data(14)), 'Hum_C_Score')
+
+    %Retrieve image one level down in tree, using Hum_C_Score as tree order
+    db.GetImageOneDownInTree(char(current_image_data(14)), 'Hum_C_Score')
      
     %}
     
@@ -72,8 +99,10 @@ classdef SQLiteImageDataBase < handle
         function this = SQLiteImageDataBase(dataBaseName, tableName)
             this.initDB(dataBaseName, tableName);
             this.initImageFolder(this.SourceImageFolderPath);
+            %CHANGE LINE BELOW TO ADAPT DB ENTRIES (1/3)
             this.dbcolnames = {'Class','SubClass','Hum_C_Score','Size','Subset','Is_MIRC','Monkey_C_Score',...
-                'Times_shown', 'Times_correct', 'Times_wrong', 'Date_last_shown','Date_added', 'Is_Original', 'Path'};
+                'Times_shown', 'Times_correct', 'Times_wrong', 'Date_last_shown','Date_added', 'Is_Original',...
+                'File_name', 'Unique_branchID','Path'};
         end
         
         %---- BELOW ARE THE INTERFACE METHODS----
@@ -159,7 +188,8 @@ classdef SQLiteImageDataBase < handle
             disp('****done importing images****');
         end
         
-        function curs = RetrieveEntriesFromTable(this, Class_in, SubClass_min, SubClass_max,...
+        %CHANGE LINES BELOW TO ADAPT DB ENTRIES (3/3) -SEARCH
+        function data_curs = RetrieveEntriesFromTable(this, Class_in, SubClass_min, SubClass_max,...
                 Hum_C_Score_min, Hum_C_Score_max, Subset_min, Subset_max,...
                 Is_MIRC_in, Monkey_C_Score_min, Monkey_C_Score_max, Times_shown_min,...
                 Times_shown_max, Sort_By_column, max_entries, Is_original_in)
@@ -192,8 +222,127 @@ classdef SQLiteImageDataBase < handle
                     ' ORDER BY ', Sort_By_column,' DESC LIMIT ',max_entries];
                 setdbprefs('DataReturnFormat','cellarray');
                 curs = exec(this.Connection,sqlquery);
-                curs = fetch(curs);
+                data_curs = fetch(curs);
+                close(curs);
         end
+        
+         function updated_entry = UpdateEntry(this, Filename,column_name, new_entry)
+              %{
+             ---- Update Column in db using Image name as index----
+            As Parameters use the filename of the image data you want to 
+            change, the columns you want to update and the new value.
+                           
+            ALL NEED TO BE STRINGS, eg
+            curs = db.UpdateEntry(char(current_image(14)),'Times_wrong',1002)
+            here current_image is the db entry for the image, so the actual
+            image can also be used (as 'patch_id112_7364466787.png')
+            Returns a cursor object to the updated single entry. 
+            To access the data, use .data on the  return (the_data = curs.data;)
+                %}
+                whereclause = ['where File_name = ''', Filename, ''''];
+                colnames = {column_name};
+                new_data = {new_entry};
+                update(this.Connection,this.dbTableName,colnames,new_data,whereclause)
+                updated_entry = RetrieveSingleEntryByName(this, Filename);
+         end
+        
+        %CHANGE LINES BELOW TO ADAPT DB ENTRIES (3/3) -SEARCH
+        function data_curs = RetrieveSingleEntryByName(this, File_name_in)
+              %{
+             ---- Retrieve db image metadata entry using image file name----
+            As Parameters use the filename of the image data you want to 
+            retrieve.
+                           
+            ALL NEED TO BE STRINGS, eg
+            curs = db.RetrieveSingleEntryByName(char(current_image(14)))
+            here current_image is the db entry for the image, so the actual
+            image can also be used (as 'patch_id112_7364466787.png')
+            Returns a cursor object to the single entry with all db data. 
+            To access the data, use .data on the  return (the_data = curs.data;)
+                %}
+            
+           sqlquery = ['SELECT * FROM ',this.dbTableName,...
+                    ' WHERE File_name = ''', File_name_in, ''''];
+                setdbprefs('DataReturnFormat','cellarray');
+                curs = exec(this.Connection,sqlquery);
+                data_curs = fetch(curs);
+                close(curs);
+        end
+        
+        function data_curs = RetrieveWholeTreeByName(this, File_name_in, Sort_By_column)
+              %{
+             ---- Retrieve db complete image tree entry using image file name----
+            As Parameters use the filename of the image data you want to 
+            retrieve and also the colum to sort the tree by.
+                           
+            ALL NEED TO BE STRINGS, eg
+            curs =
+             db.RetrieveWholeTreeByName(char(current_image(14)), 'Hum_C_Score')
+            here current_image is the db entry for the image, so the actual
+            image can also be used (as 'patch_id112_7364466787.png')
+            Returns a cursor object to the complete tree with all db data. 
+            To access the data, use .data on the  return (the_data = curs.data;)
+                %}
+            data_curs = this.RetrieveSingleEntryByName(File_name_in);
+            tree_id = data_curs.data(15);
+            sqlquery = ['SELECT * FROM ',this.dbTableName,...
+                ' WHERE Unique_branchID = ', char(tree_id),...
+                ' ORDER BY ', Sort_By_column];
+            curs = exec(this.Connection,sqlquery);
+            data_curs = fetch(curs);
+            close(curs);
+        end
+        
+        function File_name_out = GetImageOneUpInTree(this, File_name_in, Sort_By_column)
+              %{
+             ---- Retrieve image name of one image up in the tree hierachy.
+             The hierachy order column used is defined by Sort_By_column
+                           
+            ALL NEED TO BE STRINGS, eg
+            curs =
+              db.GetImageOneUpInTree(char(current_image(14)), 'Hum_C_Score')
+            here current_image is the db entry for the image, so the actual
+            image can also be used (as 'patch_id112_7364466787.png')
+            Returns a filename of the image one further up in the order of 
+            Hum_C_Score.  
+            If the image is the top leve, -1 gets returned.
+                %}
+            
+            whole_tree = this.RetrieveWholeTreeByName(File_name_in, Sort_By_column).data;
+            [row, col] = find(strcmp(whole_tree, char(File_name_in)));
+            %if not on top level
+            if row > 1
+                File_name_out = whole_tree(row-1,col);
+            else
+                File_name_out = -1;
+            end
+        end
+        
+         function File_name_out = GetImageOneDownInTree(this, File_name_in, Sort_By_column)
+             %{
+             ---- Retrieve image name of one image down in the tree hierachy.
+             The hierachy order column used is defined by Sort_By_column
+                           
+            ALL NEED TO BE STRINGS, eg
+            curs =
+              db.GetImageOneDownInTree(char(current_image(14)), 'Hum_C_Score')
+            here current_image is the db entry for the image, so the actual
+            image can also be used (as 'patch_id112_7364466787.png')
+            Returns a filename of the image one level down in the order of 
+            Hum_C_Score. 
+            If the image is the top leve, -1 gets returned.
+                %}
+            whole_tree = this.RetrieveWholeTreeByName(File_name_in, Sort_By_column).data;
+            [row, col] = find(strcmp(whole_tree, char(File_name_in)));
+            [max_r, max_c] = size(whole_tree);
+            %if not on bottom level
+            if row < max_r+1
+                File_name_out = whole_tree(row+1,col);
+            else
+                File_name_out = -1;
+            end
+        end
+        
         
     end
     
@@ -251,13 +400,14 @@ classdef SQLiteImageDataBase < handle
         
         function this = addNewTable(this)
             %{
-            ----Make new table with these rows----
+            ----Init new table with these rows----
             %}
-            createTable = ['CREATE TABLE ',this.dbTableName,'(Class varchar, '...
-                'SubClass NUMERIC, Hum_C_Score NUMERIC, Size NUMERIC, Subset NUMERIC, '...
-                'Is_MIRC NUMERIC, Monkey_C_Score NUMERIC, Times_shown NUMERIC, Times_correct NUMERIC, '...
-                'Times_wrong NUMERIC, Date_last_shown NUMERIC, Date_added NUMERIC, Is_Original NUMERIC, '...
-                'Path VARCHAR)'];
+            %CHANGE LINE BELOW TO ADAPT DB ENTRIES (2/3)
+            createTable = ['CREATE TABLE ',this.dbTableName,'(Class VARCHAR, '...
+                'SubClass VARCHAR, Hum_C_Score VARCHAR, Size VARCHAR, Subset VARCHAR, '...
+                'Is_MIRC VARCHAR, Monkey_C_Score VARCHAR, Times_shown VARCHAR, Times_correct VARCHAR, '...
+                'Times_wrong VARCHAR, Date_last_shown VARCHAR, Date_added VARCHAR, Is_Original VARCHAR, '...
+                'File_name VARCHAR, Unique_branchID VARCHAR, Path VARCHAR)'];
             exec(this.Connection,createTable)
         end
         
@@ -302,7 +452,7 @@ classdef SQLiteImageDataBase < handle
             copyfile(file_origin,file_dest);
         end
         
-        function [ImageSavePath] = copyImage(currentImage, folder_path, SourceImageFolderPath, unique_ID)
+        function [ImageSavePath, ImageSaveName] = copyImage(currentImage, folder_path, SourceImageFolderPath, unique_ID)
             %{
             ----Copy other images from loop----
             Args:
@@ -334,18 +484,18 @@ classdef SQLiteImageDataBase < handle
                 
                 %load csv file to get the meta data from
                 [num char raw] = xlsread([folder_path,'\hier_tree_info.csv']);
-                
+                Unique_branch_ID = SQLiteImageDataBase.generate_unique_ID();
                 %process each image ignoring header
                 for i = 2 :  size(raw,1)
                     %copy image into source image folder
-                    ImageSavePath = SQLiteImageDataBase.copyImage(raw{i,1}, folder_path, SourceImageFolderPath, unique_ID);
+                    [ImageSavePath, ImageSaveName]  = SQLiteImageDataBase.copyImage(raw{i,1}, folder_path, SourceImageFolderPath, unique_ID);
                     %grab other info from csv file
                     currentScore = raw{i,2};
                     currentSize = raw{i,3};
                     currentIsMIRC = raw{i,5};
                     %create entry into db as cell
                     dbdata = {Class_in, SubClass_in, currentScore, currentSize, Subset_in, currentIsMIRC, -1,...
-                        -1, -1, -1, -1, datestr(now,'yyyy-mm-dd HH:MM:SS'), 0, ImageSavePath};
+                        -1, -1, -1, -1, datestr(now,'yyyy-mm-dd HH:MM:SS'), 0,ImageSaveName,Unique_branch_ID, ImageSavePath};
                     %insert into db using the columnames defined in constructor
                     datainsert(Connection,dbTableName,dbcolnames,dbdata)
                 end

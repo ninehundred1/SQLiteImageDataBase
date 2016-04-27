@@ -137,7 +137,73 @@ The image can then be loaded using:
     imread(imagePath_string)
 
 
- ##### FOLLOW BELOW AS SETUP
+
+##### D. Complete API
+#
+
+
+##### 1. Connect to database named 'Koff' with a SQLite table called 'Experiment_1'. If neither exists, it will be created. Will also index the specified folder that contains all source images.
+#
+    db = SQLiteImageDataBase('koff', 'Experiment_1');
+    
+*Connection open.*
+
+*Location: C:\sqlite_dbs\koff.db*
+
+*PNG Images found in source folder: 2089*
+
+##### 2. Add images and Metadata to Table with a new name 'Bike_blue' and the Subclass of '1' and into the Subset of '2'. You will be asked to specify the source folder of the images.
+#
+    db.InsertIntoTable('Bike_blue', 1, 2);
+
+##### 3. Query table for parameter ranges of image metadata. Eg. Get all entries of this range sorted by Hum_C_score .
+#
+    query_return = db.RetrieveEntriesFromTable('Bike_blue2', '0','1',...
+    '0.5','0.7' , '0', '2', '0', '-1', '0', '-1','0', 'Hum_C_Score', '50','0')
+
+
+Expand the cursor to get data into the Matlab workspace as cell matrix
+
+    the_data = ans.query_return
+
+
+##### 4. Get one image metadata using the file name of image as query
+#
+    current_image_data =
+    db.RetrieveSingleEntryByName('patch_id107_7364456323.png').data
+    
+
+##### 5. Update Entry by filename as query. Eg.update data in column 'Times_wrong' to '1002'.
+#
+    db.UpdateEntry(char(current_image_data(14)),'Times_wrong',1002)
+
+Row 14 is the image name within the image data (can also use **'patch_id107_7364456323.png'** instead of **current_image_data(14)**)
+
+ 
+##### 6. Retrieve the whole image tree the current image belongs to.
+#
+    current_tree = 
+        db.RetrieveWholeTreeByName(char(current_image_data(14)).data,
+        'Hum_C_Score')
+
+The tree is based on what was specified in the initial image import as being part of the same tree. Specify with second parameter what you want your tree to be ordered as.
+
+##### 7. Retrieve the image name one level up in tree, using eg 'Hum_C_Score' as tree order.
+#
+    current_tree = 
+        db.RetrieveWholeTreeByName(char(current_image_data(14)).data,
+        'Hum_C_Score')
+
+
+##### 8. Retrieve the image name one level down in tree, using eg 'Hum_C_Score' as tree order.
+#
+    current_tree = 
+        db.GetImageOneDownInTree(char(current_image_data(14)).data,
+        'Hum_C_Score')
+        
+
+
+ ##### FOLLOW BELOW AS INITIAL SETUP
  
 1. download SQLite3 (I used Sqlite 3.11)
     https://www.sqlite.org/download.html
@@ -170,10 +236,28 @@ http://www.mathworks.com/help/database/ug/sqlite-jdbc-windows.html
     db.InsertIntoTable('Bike_blue', 1, 2);
     
     %Query table for parameter ranges
-    db.RetrieveEntriesFromTable('Bike_blue', '0','1', '0.5','0.7' , '0', '2', '0', '-1', '0', '-1','0', 'Hum_C_Score', '50','0'  )
-    
+     range = db.RetrieveEntriesFromTable('Bike_blue2', '0','1', '0.5','0.7' , '0', '2', '0', '-1', '0', '-1','0', 'Hum_C_Score', '50','0')
+ 
     %expand the cursor to get data into the Matlab workspace as cell matrix
-    the_data = ans.data
+    the_data = range.data
+    
+    %update entry 'Times_wrong' for current_image to 1000   
+     db.UpdateEntry(char(current_image(14)),'Times_wrong',1000)
+     
+    %retrieve the data for a single image using the image name
+    image_data = db.RetrieveSingleEntryByName('char(current_image(14))).data
+    
+    %retrieve the complete tree where the current_image belongs to, ordered by Hum_C_Score
+    current_tree =
+    db.RetrieveWholeTreeByName(char(current_image(15)).data, 'Hum_C_Score')
+      
+    %retrieve file name of the next image up one level in tree based on the tree hierachy of Hum_C_Score'
+    im_name = db.GetImageOneUpInTree(char(ans), 'Hum_C_Score')
+    
+     %retrieve file name of the next image up one level in tree based on the tree hierachy of Hum_C_Score'
+    im_name = db.GetImageOneDownInTree(char(ans), 'Hum_C_Score')
+  
+    
 
 
 
