@@ -388,7 +388,7 @@ classdef SQLiteImageDataBase < handle
             %or 'No Data'. Use error handling to deal with different data types
             %(string vs int)
             try
-                if ret_data.data == 0
+                if ret_data.Data == 0
                     %make new table if not present
                     fprintf('adding new table: %s',this.dbTableName);
                     this.addNewTable();
