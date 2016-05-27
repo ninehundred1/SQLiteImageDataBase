@@ -158,13 +158,12 @@ The image can then be loaded using:
 
 ##### 3. Query table for parameter ranges of image metadata. Eg. Get all entries of this range sorted by Hum_C_score .
 #
-    query_return = db.RetrieveEntriesFromTable('Bike_blue2', '0','1',...
-    '0.5','0.7' , '0', '2', '0', '-1', '0', '-1','0', 'Hum_C_Score', '50','0')
+    query_return_cursor = db.RetrieveEntriesFromTable('Bike_blue', '0','1', '0.6','0.7','0', '2', '0', '-1', '0', '-1','0', 'Hum_C_Score', '50','0')
 
 
 Expand the cursor to get data into the Matlab workspace as cell matrix
 
-    the_data = ans.query_return
+    the_data = query_return_cursor.data
 
 
 ##### 4. Get one image metadata using the file name of image as query
